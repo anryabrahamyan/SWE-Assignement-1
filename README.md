@@ -28,7 +28,7 @@ curl -s -X POST http://localhost:8000/upload \
   "message": "Image processed successfully",
   "job_id": 14,
   "hashtags": [
-    "#solitude #reflection #nature #peace #stillness"
+    "#cat #pet #feline #greenbackground #portrait"
   ]
 }
 ```
