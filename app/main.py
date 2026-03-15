@@ -163,3 +163,18 @@ async def get_history(
         "results": response_data,
         "source": "PostgreSQL Replica & MongoDB"
     }
+
+@app.get("/debug/gemini")
+async def debug_gemini():
+    """Temporary debug endpoint to test Gemini directly from inside the container."""
+    if not model:
+        return {"status": "error", "detail": "model is None — GEMINI_API_KEY not set or import failed"}
+    try:
+        from PIL import Image
+        import io
+        # Use a tiny 1x1 white pixel to test the API connection
+        img = Image.new('RGB', (10, 10), color='white')
+        response = model.generate_content(["Reply with exactly: #test #ok #gemini #working #success", img])
+        return {"status": "success", "response": response.text}
+    except Exception as e:
+        return {"status": "error", "error_type": type(e).__name__, "detail": str(e)}
