@@ -50,7 +50,7 @@ Client ──► FastAPI
 - A `.env` file in the project root:
 
 ```env
-GEMINI_API_KEY=AIzaSyDt39kMrJQS3LAghaVe15-hvRWwPsgXqAU
+GEMINI_API_KEY=YOUR_API_KEY_HERE
 ```
 
 ### Start Everything
