@@ -1,5 +1,3 @@
-version: '5.1'
-
 services:
   postgres-primary:
     image: postgres:15

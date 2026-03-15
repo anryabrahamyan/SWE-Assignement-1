@@ -27,7 +27,7 @@ try:
     gemini_key = os.getenv("GEMINI_API_KEY")
     if gemini_key and gemini_key != "YOUR_API_KEY_HERE":
         genai.configure(api_key=gemini_key)
-        model = genai.GenerativeModel('gemini-1.5-flash') # Using newer vision-capable model
+        model = genai.GenerativeModel('gemini-2.0-flash')  # Stable vision-capable model
     else:
         model = None
 except ImportError:
