@@ -18,29 +18,39 @@ services:
       - "5432:5432"
     volumes:
       - primary_data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./init.sql:/docker-entrypoint-initdb.d/10-init.sql
+      # Mount the new script to open up replication connections
+      - ./init-hba.sh:/docker-entrypoint-initdb.d/20-init-hba.sh
+    healthcheck:
+      test: ["CMD-SHELL", "psql -U postgres -d saas_db -c 'SELECT 1 FROM image_jobs LIMIT 1'"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
     networks:
       - saas_network
 
   postgres-replica-1:
     image: postgres:15
     container_name: postgres-replica-1
+    user: postgres
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-    command: >
+      - PGPASSWORD=postgres
+    command: |
       bash -c "
       until pg_isready -h postgres-primary -p 5432 -U postgres; do sleep 1; done;
-      if [ ! -s /var/lib/postgresql/data/PG_VERSION ]; then
-        rm -rf /var/lib/postgresql/data/*
-        PGPASSWORD=postgres pg_basebackup -h postgres-primary -D /var/lib/postgresql/data -U postgres -vP -R
+      if [ ! -f /var/lib/postgresql/data/standby.signal ]; then
+        echo 'Cloning primary...'
+        rm -rf /var/lib/postgresql/data/{*,.*} 2>/dev/null || true
+        pg_basebackup -h postgres-primary -D /var/lib/postgresql/data -U postgres -R -X stream
       fi;
-      docker-entrypoint.sh postgres
+      chmod 700 /var/lib/postgresql/data
+      exec postgres -c listen_addresses='*' -c hot_standby=on
       "
     ports:
       - "5433:5432"
     depends_on:
-      - postgres-primary
+      postgres-primary:
+        condition: service_healthy
     volumes:
       - replica_1_data:/var/lib/postgresql/data
     networks:
@@ -49,22 +59,25 @@ services:
   postgres-replica-2:
     image: postgres:15
     container_name: postgres-replica-2
+    user: postgres
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-    command: >
+      - PGPASSWORD=postgres
+    command: |
       bash -c "
       until pg_isready -h postgres-primary -p 5432 -U postgres; do sleep 1; done;
-      if [ ! -s /var/lib/postgresql/data/PG_VERSION ]; then
-        rm -rf /var/lib/postgresql/data/*
-        PGPASSWORD=postgres pg_basebackup -h postgres-primary -D /var/lib/postgresql/data -U postgres -vP -R
+      if [ ! -f /var/lib/postgresql/data/standby.signal ]; then
+        echo 'Cloning primary...'
+        rm -rf /var/lib/postgresql/data/{*,.*} 2>/dev/null || true
+        pg_basebackup -h postgres-primary -D /var/lib/postgresql/data -U postgres -R -X stream
       fi;
-      docker-entrypoint.sh postgres
+      chmod 700 /var/lib/postgresql/data
+      exec postgres -c listen_addresses='*' -c hot_standby=on
       "
     ports:
       - "5434:5432"
     depends_on:
-      - postgres-primary
+      postgres-primary:
+        condition: service_healthy
     volumes:
       - replica_2_data:/var/lib/postgresql/data
     networks:
@@ -98,8 +111,14 @@ services:
       - MONGODB_URL=mongodb://mongoadmin:mongosecret@mongodb:27017
       - GEMINI_API_KEY=${GEMINI_API_KEY:-YOUR_API_KEY_HERE}
     depends_on:
-      - postgres-primary
-      - mongodb
+      postgres-primary:
+        condition: service_healthy
+      postgres-replica-1:
+        condition: service_started
+      postgres-replica-2:
+        condition: service_started
+      mongodb:
+        condition: service_started
     networks:
       - saas_network
 

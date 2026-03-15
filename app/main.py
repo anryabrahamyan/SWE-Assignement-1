@@ -138,32 +138,36 @@ async def get_history(
     """
     logger.info(f"Querying history for Tenant: {tenant_id} on Replica Shard.")
     
-    # Query Relational Data from Read-Replica
-    jobs = reader_db.query(ImageJob).filter(ImageJob.tenant_id == tenant_id).order_by(ImageJob.created_at.desc()).offset(skip).limit(limit).all()
-    job_ids = [j.id for j in jobs]
-    
-    # Query Metadata from MongoDB
-    cursor = mongo_db.image_results.find({"job_id": {"$in": job_ids}})
-    mongo_results = await cursor.to_list(length=limit)
-    
-    # Map Mongo results by job_id
-    results_map = {doc["job_id"]: doc["hashtags"] for doc in mongo_results}
-    
-    response_data = []
-    for job in jobs:
-        response_data.append({
-            "job_id": job.id,
-            "status": job.status,
-            "file_path": job.file_path,
-            "created_at": job.created_at,
-            "hashtags": results_map.get(job.id, [])
-        })
+    try:
+        # Query Relational Data from Read-Replica
+        jobs = reader_db.query(ImageJob).filter(ImageJob.tenant_id == tenant_id).order_by(ImageJob.created_at.desc()).offset(skip).limit(limit).all()
+        job_ids = [j.id for j in jobs]
         
-    return {
-        "tenant_id": tenant_id,
-        "results": response_data,
-        "source": "PostgreSQL Replica & MongoDB"
-    }
+        # Query Metadata from MongoDB
+        cursor = mongo_db.image_results.find({"job_id": {"$in": job_ids}})
+        mongo_results = await cursor.to_list(length=limit)
+        
+        # Map Mongo results by job_id
+        results_map = {doc["job_id"]: doc["hashtags"] for doc in mongo_results}
+        
+        response_data = []
+        for job in jobs:
+            response_data.append({
+                "job_id": job.id,
+                "status": job.status,
+                "file_path": job.file_path,
+                "created_at": job.created_at,
+                "hashtags": results_map.get(job.id, [])
+            })
+            
+        return {
+            "tenant_id": tenant_id,
+            "results": response_data,
+            "source": "PostgreSQL Replica & MongoDB"
+        }
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "traceback": traceback.format_exc()}
 
 @app.get("/debug/gemini")
 async def debug_gemini():
