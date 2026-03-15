@@ -5,6 +5,7 @@ import datetime
 import logging
 from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
+import google.generativeai as genai
 
 from database import writer_engine, mongo_db, Base
 from models import Tenant, User, Transaction, ImageJob
@@ -23,11 +24,10 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # Try setting up Gemini Pro Vision
 try:
-    import google.generativeai as genai
     gemini_key = os.getenv("GEMINI_API_KEY")
     if gemini_key and gemini_key != "YOUR_API_KEY_HERE":
         genai.configure(api_key=gemini_key)
-        model = genai.GenerativeModel('gemini-2.0-flash')  # Stable vision-capable model
+        model = genai.GenerativeModel('gemini-3.1-flash-lite-preview')  # Stable vision-capable model
     else:
         model = None
 except ImportError:
@@ -95,14 +95,15 @@ async def upload_image(
     hashtags = []
     if model:
         try:
-            # We can use Pillow to wrap bytes
             from PIL import Image
-            img = Image.open(io.BytesIO(content))
+            # We must seek back to 0 because `await file.read()` earlier advanced the file pointer 
+            # OR we just re-read it from disk since we explicitly saved it in the steps above
+            img = Image.open(file_path)
             response = model.generate_content(["Provide 5 concise hashtags describing this image.", img])
             hashtags = [h.strip() for h in response.text.split("\n") if h.strip()]
         except Exception as e:
             logger.error(f"Gemini API Error: {e}")
-            hashtags = ["#error", "#gemini_failed"]
+            hashtags = ["#error", f"#errormsg:{str(e)[:50].replace(' ', '_')}"]
     else:
         hashtags = ["#mock", "#image", "#processed"]
         
@@ -177,4 +178,17 @@ async def debug_gemini():
         response = model.generate_content(["Reply with exactly: #test #ok #gemini #working #success", img])
         return {"status": "success", "response": response.text}
     except Exception as e:
-        return {"status": "error", "error_type": type(e).__name__, "detail": str(e)}
+        available_models = []
+        try:
+            for m in genai.list_models():
+                if 'generateContent' in m.supported_generation_methods:
+                    available_models.append(m.name)
+        except Exception as e2:
+            available_models = [f"Failed to list: {str(e2)}"]
+            
+        return {
+            "status": "error", 
+            "error_type": type(e).__name__, 
+            "detail": str(e),
+            "available_models": available_models
+        }

@@ -6,6 +6,30 @@ A FastAPI service that accepts image uploads and returns AI-generated hashtags v
 
 ---
 
+## Example
+
+![Test Image](./test_image.jpg)
+
+**Request:**
+```bash
+curl -s -X POST http://localhost:8000/upload \
+  -H "X-Tenant-ID: 1" \
+  -F "file=@./test_image.jpg" | jq .
+```
+
+**Response:**
+```json
+{
+  "message": "Image processed successfully",
+  "job_id": 14,
+  "hashtags": [
+    "#solitude #reflection #nature #peace #stillness"
+  ]
+}
+```
+
+---
+
 ## Setup & Execution
 
 ### 1. Prerequisites
